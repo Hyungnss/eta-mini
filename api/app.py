@@ -2,6 +2,7 @@ import importlib
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
+from fastapi.responses import HTMLResponse
 
 # 어떤 방식의 API를 쓸 것인지를 외부에서 환경변수를 주입
 MODEL_IMPL = os.getenv("MODEL_IMPL", "rule")
@@ -20,6 +21,21 @@ class EtaResponse(BaseModel):
     model: str  # 어떤 구현체가 낸 예측인지 (장애 추적용)
 
 app = FastAPI(title="delivery-eta")
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    """루트 안내 페이지."""
+    return f"""
+    <!doctype html>
+    <html lang="ko">
+    <head><meta charset="utf-8"><title>delivery-eta</title></head>
+    <body>
+      <h1>배달 예상 시간 API</h1>
+      <p>현재 모델: {MODEL_IMPL}</p>
+      <a href="/docs">API 문서</a>
+    </body>
+    </html>
+    """
 
 @app.get("/health")
 def health() -> dict[str, str]:
