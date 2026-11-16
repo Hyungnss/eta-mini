@@ -1,0 +1,27 @@
+[package]
+name = "eta-api-rust"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "eta-api"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
+# float_roundtrip: 입력 숫자를 Python 과 똑같은 f64 로 읽는다 (마지막 자리 오차 방지)
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+# load-dynamic: ONNX Runtime 을 내려받지 않고 ORT_LIB 경로의 공유 라이브러리를 dlopen 한다
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-31"] }
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
