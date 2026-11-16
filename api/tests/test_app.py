@@ -198,3 +198,17 @@ def test_eta_overflow_never_returns_non_finite_minutes():
     if res.status_code == 200:
         minutes = res.json()["minutes"]
         assert isinstance(minutes, (int, float)) and math.isfinite(minutes)
+
+
+# --- 루트 페이지 (api/static/index.html, Go 서비스와 공유) ---
+
+def test_index_page_shows_model_and_usage():
+    """/ 는 200 HTML 로 현재 모델 이름, /eta·/health 사용법, /docs 링크를 보여 준다."""
+    res = client.get("/")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/html")
+    page = res.text
+    assert "모델: rule</span>" in page and '"model": "rule"}' in page
+    assert "/eta" in page and "/health" in page
+    assert 'href="/docs"' in page
+    assert "{{" not in page  # 자리표시자가 남지 않는다

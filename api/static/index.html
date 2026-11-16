@@ -1,0 +1,182 @@
+<!doctype html>
+<!--
+  배달 예상 시간 API 루트 페이지. Python(api/app.py), Go(api-go), Rust(api-rust) 서비스가 함께 쓴다.
+  서버가 내려 주기 전에 아래 자리표시자를 바꿔 넣는다 (값은 HTML 이스케이프한다).
+    {{model}}      현재 구현체 이름 (MODEL_IMPL / MODEL_NAME)
+    {{docs_link}}  API 문서 링크 HTML. 문서 페이지가 없는 서비스는 빈 문자열
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>delivery-eta</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6677;
+    --line: #e2e5eb; --accent: #2f6fde; --accent-soft: #e8f0fd;
+    --ok: #1d8a4e; --err: #c2382f; --code-bg: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b1f27; --text: #e6e9ef; --muted: #9aa3b2;
+      --line: #2c323d; --accent: #6b9cf5; --accent-soft: #1f2b42;
+      --ok: #4cc283; --err: #f0776e; --code-bg: #232833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 56px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+  h1 { font-size: 26px; margin: 0; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+  h3 { font-size: 15px; margin: 20px 0 6px; }
+  p { margin: 0 0 12px; }
+  .lead { color: var(--muted); margin-bottom: 24px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600;
+  }
+  .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .badge.up::before { background: var(--ok); }
+  .badge.down::before { background: var(--err); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  .links a { color: var(--accent); margin-right: 16px; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 8px; }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .method { font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 4px; color: #fff; }
+  .get { background: var(--ok); } .post { background: var(--accent); }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input {
+    font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px;
+  }
+  button {
+    font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0;
+    border-radius: 8px; padding: 9px 16px; cursor: pointer;
+  }
+  .result { margin-top: 14px; }
+  .minutes { font-size: 28px; font-weight: 700; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.err { color: var(--err); }
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>배달 예상 시간 API</h1>
+    <span class="badge" id="health">모델: {{model}}</span>
+  </header>
+  <p class="lead">가게에서 배달지까지의 거리와 밀려 있는 주문 수로 배달 예상 시간(분)을 계산합니다.</p>
+
+  <section class="card">
+    <h2>바로 해 보기</h2>
+    <form id="try">
+      <label>배달 거리 (km)
+        <input name="distance_km" type="number" min="0" step="any" value="3" required>
+      </label>
+      <label>대기 주문 수 (건)
+        <input name="pending_orders" type="number" min="0" step="1" value="2" required>
+      </label>
+      <button type="submit">예상 시간 계산</button>
+    </form>
+    <div class="result" id="result" aria-live="polite"></div>
+  </section>
+
+  <section class="card">
+    <h2>엔드포인트</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>메서드</th><th>경로</th><th>설명</th></tr>
+        <tr><td><span class="method post">POST</span></td><td><code>/eta</code></td><td>배달 예상 시간(분)을 계산</td></tr>
+        <tr><td><span class="method get">GET</span></td><td><code>/health</code></td><td>서비스 상태와 현재 구현체 이름</td></tr>
+      </table>
+    </div>
+
+    <h3>요청 본문 (<code>POST /eta</code>, JSON)</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>필드</th><th>타입</th><th>규칙</th></tr>
+        <tr><td><code>distance_km</code></td><td>number</td><td>0 이상. 가게에서 배달지까지 거리(km)</td></tr>
+        <tr><td><code>pending_orders</code></td><td>integer</td><td>0 이상. 지금 밀려 있는 주문 수</td></tr>
+      </table>
+    </div>
+
+    <h3>요청 예시</h3>
+    <pre><code id="curl-eta">curl -X POST /eta \
+  -H "Content-Type: application/json" \
+  -d '{"distance_km": 3, "pending_orders": 2}'</code></pre>
+
+    <h3>응답 예시 (200)</h3>
+    <pre><code>{"minutes": 28.94, "model": "{{model}}"}</code></pre>
+
+    <h3>잘못된 입력 (422)</h3>
+    <p>음수, 숫자가 아닌 값, 정수가 아닌 주문 수, 빠진 필드는 422 를 돌려줍니다.
+      <code>detail[].loc</code> 에 어느 필드가 잘못됐는지 들어 있습니다.</p>
+    <pre><code>{"detail": [{"type": "greater_than_equal", "loc": ["body", "distance_km"],
+             "msg": "Input should be greater than or equal to 0", "input": -1}]}</code></pre>
+
+    <h3>상태 확인</h3>
+    <pre><code id="curl-health">curl /health
+# {"status": "ok", "model": "{{model}}"}</code></pre>
+  </section>
+
+  <p class="links">{{docs_link}}</p>
+</main>
+<script>
+  // 예시 명령어에 지금 접속한 주소를 채운다
+  for (const id of ["curl-eta", "curl-health"]) {
+    const el = document.getElementById(id);
+    el.textContent = el.textContent.replace(/ \/(eta|health)/, (m, p) => ` ${location.origin}/${p}`);
+  }
+
+  // 상태 배지: /health 응답으로 켜짐/꺼짐 표시
+  const badge = document.getElementById("health");
+  fetch("/health")
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((h) => { badge.classList.add("up"); badge.textContent = `모델: ${h.model} · ${h.status}`; })
+    .catch(() => { badge.classList.add("down"); });
+
+  // 폼 → POST /eta
+  const result = document.getElementById("result");
+  document.getElementById("try").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = { distance_km: Number(f.get("distance_km")), pending_orders: Number(f.get("pending_orders")) };
+    result.textContent = "계산 중…";
+    try {
+      const res = await fetch("/eta", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      result.replaceChildren();
+      if (res.ok) {
+        const m = document.createElement("div");
+        m.className = "minutes";
+        m.textContent = `약 ${data.minutes.toFixed(1)}분`;
+        const s = document.createElement("div");
+        s.className = "status";
+        s.textContent = `HTTP ${res.status} · ${JSON.stringify(data)}`;
+        result.append(m, s);
+      } else {
+        const s = document.createElement("div");
+        s.className = "status err";
+        s.textContent = `HTTP ${res.status} · ${(data.detail || []).map((d) => `${d.loc.join(".")}: ${d.msg}`).join(" / ")}`;
+        result.append(s);
+      }
+    } catch (err) {
+      result.textContent = `요청 실패: ${err}`;
+    }
+  });
+</script>
+</body>
+</html>

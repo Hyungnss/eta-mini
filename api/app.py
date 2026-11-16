@@ -1,5 +1,7 @@
+import html
 import importlib
 import os
+from pathlib import Path
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
@@ -22,20 +24,18 @@ class EtaResponse(BaseModel):
 
 app = FastAPI(title="delivery-eta")
 
+# 루트 페이지는 Go 서비스(api-go)와 같은 파일을 쓴다
+INDEX_HTML = (
+    (Path(__file__).parent / "static" / "index.html")
+    .read_text(encoding="utf-8")
+    .replace("{{model}}", html.escape(MODEL_IMPL))
+    .replace("{{docs_link}}", '<a href="/docs">API 문서 (Swagger UI)</a> <a href="/redoc">ReDoc</a>')
+)
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    """루트 안내 페이지."""
-    return f"""
-    <!doctype html>
-    <html lang="ko">
-    <head><meta charset="utf-8"><title>delivery-eta</title></head>
-    <body>
-      <h1>배달 예상 시간 API</h1>
-      <p>현재 모델: {MODEL_IMPL}</p>
-      <a href="/docs">API 문서</a>
-    </body>
-    </html>
-    """
+    """루트 안내 페이지 (API 사용법과 바로 해 보기 폼)."""
+    return INDEX_HTML
 
 @app.get("/health")
 def health() -> dict[str, str]:
